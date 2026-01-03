@@ -1,0 +1,63 @@
+name: Android APK Build Workflow
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build Type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+
+jobs:
+  build-android:
+    runs-on: ubuntu-22.04
+    env:
+      ANDROID_COMPILE_SDK: 23
+      ANDROID_BUILD_TOOLS: 23.0.3
+      ANDROID_SDK_TOOLS: 4333796
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java Environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '8'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make Gradlew Executable
+        run: chmod +x ./gradlew
+
+      - name: Download Dependencies
+        run: ./gradlew dependencies --no-daemon
+
+      - name: Build APK
+        run: ./gradlew assemble${{ inputs.build_type || 'Debug' }} --no-daemon
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hotspot-app-${{ inputs.build_type || 'debug' }}
+          path: |
+            app/build/outputs/apk/${{ inputs.build_type || 'debug' }}/*.apk
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Cleanup
+        if: always()
+        run: ./gradlew clean --no-daemon
